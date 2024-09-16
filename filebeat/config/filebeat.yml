@@ -1,0 +1,22 @@
+filebeat.config:
+  modules:
+    path: ${path.config}/modules.d/*.yml
+    reload.enabled: false
+
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/lib/mysql/slow.log
+  fields:
+    application: mysql
+  fields_under_root: true
+  tags: ["mysql"]
+  # Multiline settings
+  multiline.pattern: '^# Time:'
+  multiline.negate: true
+  multiline.match: after
+
+output.logstash:
+  hosts: ["logstash:5044"]
+  index: "mysql_service"

@@ -1,0 +1,132 @@
+services: 
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.23
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    env_file:
+      - .env
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - ELASTIC_PASSWORD=root
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - logs_network
+    restart: unless-stopped
+
+  kibana:
+    container_name: kibana
+    image: docker.elastic.co/kibana/kibana:7.17.23
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=root
+    depends_on:
+      - elasticsearch
+    networks:
+      - logs_network
+    restart: unless-stopped
+
+  logstash:
+    container_name: logstash
+    image: docker.elastic.co/logstash/logstash:7.17.23
+    ports:
+      - "5000:5000"
+      - "5044:5044"
+      - "9600:9600"
+    volumes:
+      - ./logstash/config:/usr/share/logstash/pipeline/
+    depends_on:
+      - elasticsearch
+    networks:
+      - logs_network
+    restart: unless-stopped
+
+  filebeat_mysql:
+    image: docker.elastic.co/beats/filebeat:8.15.1
+    container_name: filebeat_mysql
+    user: root
+    volumes:
+      - ./filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - mysql:/var/lib/mysql:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - mysql-registry:/usr/share/filebeat/data:rw
+    command: filebeat -e -strict.perms=false
+    depends_on:
+      - logstash
+      - mysql
+    networks:
+      - logs_network
+    restart: unless-stopped
+  
+  filebeat_node:
+    image: docker.elastic.co/beats/filebeat:8.15.1
+    container_name: filebeat_node
+    user: root
+    volumes:
+      - ./filebeat/config/filebeat_app.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - app-registry:/usr/share/filebeat/data:rw
+    command: filebeat -e -strict.perms=false
+    depends_on:
+      - logstash
+      - nodeapp
+    networks:
+      - logs_network
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: store
+      MYSQL_USER: marcus
+      MYSQL_PASSWORD: marcus
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql:/var/lib/mysql
+    command: >
+      --slow_query_log=ON
+      --slow_query_log_file=/var/lib/mysql/slow.log
+      --long_query_time=1
+    networks:
+      - logs_network
+    restart: unless-stopped
+  
+  nodeapp:
+    container_name: nodeapp
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mysql
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - logs_network
+    restart: unless-stopped
+  
+volumes:
+  mysql:
+  esdata:
+  mysql-registry:
+  app-registry:
+
+networks:
+  logs_network:
+    driver: bridge

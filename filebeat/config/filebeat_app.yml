@@ -1,0 +1,18 @@
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      # processors:
+      #   - add_container_metadata: ~
+      templates:
+        - condition.contains:
+              docker.container.name: nodeapp
+          config:
+            - type: log
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              tags: ["nodeapp"]
+
+output.logstash:
+  hosts: ["logstash:5044"]
+  index: "nodeapp_service"
