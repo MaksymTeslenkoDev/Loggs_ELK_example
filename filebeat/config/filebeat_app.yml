@@ -1,3 +1,7 @@
+http:
+  enabled: true
+  host: http://filebeat_node:5067
+name: filebeat_node
 filebeat.autodiscover:
   providers:
     - type: docker

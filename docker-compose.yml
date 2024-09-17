@@ -42,6 +42,8 @@ services:
       - "9600:9600"
     volumes:
       - ./logstash/config:/usr/share/logstash/pipeline/
+    labels:
+      - "app.name=logstash"
     depends_on:
       - elasticsearch
     networks:
@@ -59,6 +61,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - mysql-registry:/usr/share/filebeat/data:rw
     command: filebeat -e -strict.perms=false
+    labels:
+      - "app.name=Filebeat MySQL Application"
+    ports:
+      - "5066:5066"
     depends_on:
       - logstash
       - mysql
@@ -76,6 +82,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - app-registry:/usr/share/filebeat/data:rw
     command: filebeat -e -strict.perms=false
+    labels:
+      - "app.name=Filebeat Node Application"
+    ports:
+      - "5067:5066"
     depends_on:
       - logstash
       - nodeapp
@@ -121,11 +131,62 @@ services:
       - logs_network
     restart: unless-stopped
   
+  influxdb:
+    image: influxdb:1.8
+    container_name: influxdb
+    env_file: .env
+    environment:
+      - INFLUX_HOST=localhost
+    ports:
+      - '${INFLUXDB_PORT}:${INFLUXDB_PORT}'
+    volumes:
+      - ./:/imports
+      - influxdb_data:/var/lib/influxdb
+    entrypoint: sh -c "influxd run -config /etc/influxdb/influxdb.conf & until influx -host localhost -execute 'CREATE DATABASE telegraf'; do echo waiting for influxdb; sleep 1; done; wait"
+    networks:
+      - logs_network
+
+  telegraf:
+    container_name: telegraf
+    image: telegraf:1.29-alpine
+    env_file: .env
+    volumes:
+      - ./telegraf/etc/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - influxdb
+    links:
+      - influxdb
+    ports:
+      - '${TELEGRAF_PORT}:${TELEGRAF_PORT}/udp'
+    networks:
+      - logs_network
+    entrypoint: /bin/sh -c "chmod 666 /var/run/docker.sock && /entrypoint.sh telegraf"
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:8.0.2
+    depends_on:
+      - influxdb
+    env_file: .env
+    links:
+      - influxdb
+    ports:
+      - '3001:3000'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+      - ./grafana/dashboards/:/var/lib/grafana/dashboards/
+    networks:
+      - logs_network
+  
 volumes:
   mysql:
   esdata:
   mysql-registry:
   app-registry:
+  influxdb_data:
+  grafana_data:
 
 networks:
   logs_network:
