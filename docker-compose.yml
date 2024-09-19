@@ -35,7 +35,9 @@ services:
 
   logstash:
     container_name: logstash
-    image: docker.elastic.co/logstash/logstash:7.17.23
+    build:
+      context: ./logstash
+    user: root
     ports:
       - "5000:5000"
       - "5044:5044"
@@ -180,6 +182,39 @@ services:
     networks:
       - logs_network
   
+  graylog:
+    image: graylog/graylog:6.0
+    container_name: graylog
+    environment:
+      GRAYLOG_PASSWORD_SECRET: secretsecretsecretsecret
+      GRAYLOG_ROOT_PASSWORD_SHA2: 8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918 # admin
+      GRAYLOG_HTTP_EXTERNAL_URI: http://localhost:9000/
+      GRAYLOG_ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      GRAYLOG_MONGODB_URI: mongodb://mongo:27017/graylog
+    entrypoint: /usr/bin/tini -- wait-for-it mongo:27017 -- wait-for-it elasticsearch:9200 -- /docker-entrypoint.sh
+    links:
+      - mongo
+      - elasticsearch
+    depends_on:
+      - mongo
+      - elasticsearch
+    volumes:
+      - ./graylog/config:/etc/graylog/server/
+    ports:
+      - "9000:9000"  # Web interface
+      - "12201:12201"  # GELF TCP and UDP
+    networks:
+      - logs_network
+  
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    networks:
+      - logs_network
+    volumes:
+      - mongo_data:/data/db
+    # restart: unless-stopped
+  
 volumes:
   mysql:
   esdata:
@@ -187,6 +222,8 @@ volumes:
   app-registry:
   influxdb_data:
   grafana_data:
+  mongo_data:
+    driver: local
 
 networks:
   logs_network:
