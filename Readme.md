@@ -3,8 +3,8 @@ Collecting mysql slow logs and node app logs with use of ELK stack and graylog a
 
 Query: 
 bash```
-siege -c120 -r10 -b 'http://0.0.0.0:3000/query'
-```
+siege -c120 -r10 -b 'http://0.0.0.0:3000/query'```
+
 
 ## Kibana logs dashboard example
 
@@ -15,7 +15,7 @@ Collected mysql slow logs example
 
 ### Filebeat perfomance 
 
-![filebeat](./images/Beats_1.png)
+![filebeat](./images/Beats_1.png "filebeat")
 
 ### Logstash pefomance
 
